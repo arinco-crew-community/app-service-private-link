@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "storageAccountName": {
+      "value": "arincoappstore"
+    },
+    "virtualNetworkName": {
+      "value": "arincoapp-vnet"
+    },
+    "sqlServerName": {
+      "value": "arincoapp-sql"
+    },
+    "databaseName": {
+      "value": "arincoapp-db"
+    },
+    "websiteName": {
+      "value": "arincoapp-web"
+    },
+    "webAppHostingPlanName": {
+      "value": "arincoapp-asp"
+    },
+    "sqlServerAdminUsername": {
+      "value": "adminuser"
+    },
+    "sqlServerAdminPassword": {
+      "value": "thisisaverylongpasswordandyoureallyshouldchangeit!"
+    },
+    "location": {
+      "value": "[resourceGroup().location]"
+    },
+    "databaseSkuName": {
+      "value": "Basic"
+    },
+    "databaseSkuTier": {
+      "value": "Basic"
+    },
+    "webAppHostingPlanSku": {
+      "value": "S1"
+    }
+  }
+}
