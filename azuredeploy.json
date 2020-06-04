@@ -415,7 +415,7 @@
       "type": "Microsoft.Resources/deployments",
       "dependsOn": [
         "[resourceId('Microsoft.Network/privateEndpoints', concat(parameters('storageAccountName'),'-pl-blob'))]",
-        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.database.windows.net')]"
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]"
       ],
       "properties": {
         "expressionEvaluationOptions": {
