@@ -207,8 +207,7 @@ And now we can deploy the Web App
 az webapp create \
   --resource-group app-service-private-link \
   --plan arinco-app-web-asp \
-  --name arinco-app-web \
-  --deployment-local-git
+  --name arinco-app-web 
 ```
 
 And assign it a managed service identity
@@ -241,11 +240,11 @@ az webapp config appsettings set \
 And to connect to our Azure SQL database we need to set the connection string
 
 ``` sh
-az webapp config appsettings set \
+az webapp config connection-string set \
   --resource-group app-service-private-link \
   --name arinco-app-web \
   --connection-string-type SQLAzure \
-  -- settings DbContext='Server=tcp:arinco-app-sql.database.windows.net,1433;Database=arinco-app-db;'
+  --settings DbContext='Server=tcp:arinco-app-sql.database.windows.net,1433;Database=arinco-app-db;'
 ```
 
 ## Validate DNS resolution
@@ -300,4 +299,41 @@ az sql server ad-admin create \
 Now we can deploy the sample application to the app service.
 
 ``` sh
+az webapp deployment source config \
+ --resource-group app-service-private-link \
+ --name arinco-app-web \
+ --repo-url https://github.com/arincoau/app-service-private-link \
+ --branch master \
+ --manual-integration
+```
+
+And once deployment is complete we can verify everything worked correctly and our website is up and running by browsing: [https://arinco-app-web.azurewebsites.net/api/movies](https://arinco-app-web.azurewebsites.net/api/movies) and it should display the following output:
+
+``` json
+[
+  {
+    "id": 1,
+    "title": "The Shawshank Redemption",
+    "releaseDate": "1994-10-14T00:00:00",
+    "genre": "Drama"
+  },
+  {
+    "id": 2,
+    "title": "The Godfather",
+    "releaseDate": "1972-03-24T00:00:00",
+    "genre": "Drama"
+  },
+  {
+    "id": 3,
+    "title": "The Godfather: Part II",
+    "releaseDate": "1974-12-18T00:00:00",
+    "genre": "Drama"
+  },
+  {
+    "id": 4,
+    "title": "The Dark Knight",
+    "releaseDate": "2008-07-18T00:00:00",
+    "genre": "Action"
+  }
+]
 ```
