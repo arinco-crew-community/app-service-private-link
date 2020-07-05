@@ -65,6 +65,7 @@ az network vnet subnet update \
 ```
 
 ### web
+
 ``` sh
 az network vnet subnet create \
   --resource-group app-service-private-link \
@@ -96,7 +97,7 @@ az network private-dns zone create \
   --name privatelink.database.windows.net 
 ```
 
-And link the Private DNS zones to the VNET we created previously.
+And link the Private DNS zones to the VNET we just created.
 
 ``` sh
 az network private-dns link vnet create \
@@ -228,7 +229,7 @@ az webapp vnet-integration add \
   --subnet web
 ```
 
-To finish the configuration we need to set a couple of Application settings on the Web App. These configuration setting are WEBSITE_VNET_ROUTE_ALL set to 1 which will tell the App Service to route all traffic via the VNET. By default, your app routes only RFC1918 traffic into your VNET. The other setting is WEBSITE_DNS_SERVER which needs to be set to Azure's virtual public DNS IP address 168.63.129.16. More information on these settings can be found in the Azure documentation [here](https://docs.microsoft.com/en-us/azure/app-service/web-sites-integrate-with-vnet).
+To finish the configuration we need to set a couple of Application settings on the Web App. These configuration setting are WEBSITE_VNET_ROUTE_ALL set to 1 which will tell the App Service to route all traffic via the VNET. By default, an app service routes only RFC1918 traffic to the VNET. The other setting is WEBSITE_DNS_SERVER which needs to be set to Azure's virtual public DNS IP address 168.63.129.16. More information on these settings can be found in the Azure documentation [here](https://docs.microsoft.com/en-us/azure/app-service/web-sites-integrate-with-vnet).
 
 ``` sh
 az webapp config appsettings set \
@@ -237,7 +238,7 @@ az webapp config appsettings set \
   --settings WEBSITE_VNET_ROUTE_ALL=1 WEBSITE_DNS_SERVER=168.63.129.16
 ```
 
-And to connect to our Azure SQL database we need to set the connection string
+And to connect to our Azure SQL database we need to set the connection string.
 
 ``` sh
 az webapp config connection-string set \
@@ -284,13 +285,13 @@ az ad sp list \
   --output json
 ```
 
-Then we can add the app service as an administrator of the Azur SQL server. Replate <app_service_object_id> with the output of the command above.
+Then we can add the app service as an administrator of the Azur SQL server. Replace <app_service_object_id> with the output of the command above.
 
 ``` sh
 az sql server ad-admin create \
   --resource-group app-service-private-link \
   --server-name arinco-app-sql \
-  --object-id 5feb9f22-8905-467d-b2fe-1ece38e1d5df \
+  --object-id <app_service_object_id> \
   --display-name arinco-app-web 
 ```
 
@@ -307,7 +308,7 @@ az webapp deployment source config \
  --manual-integration
 ```
 
-And once deployment is complete we can verify everything worked correctly and our website is up and running by browsing: [https://arinco-app-web.azurewebsites.net/api/movies](https://arinco-app-web.azurewebsites.net/api/movies) and it should display the following output:
+And once deployment is complete we can verify everything worked correctly and our website is up and running by browsing: [https://arinco-app-web.azurewebsites.net/api/movies](https://arinco-app-web.azurewebsites.net/api/movies). It should display the following output:
 
 ``` json
 [
