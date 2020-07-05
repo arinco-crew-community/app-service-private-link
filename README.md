@@ -297,7 +297,7 @@ az sql server ad-admin create \
 
 ### Deploy app code
 
-Now we can deploy the sample application to the app service.
+Now we can deploy the sample application to the app service. This command may take some time (~5 minutes)
 
 ``` sh
 az webapp deployment source config \
