@@ -213,7 +213,8 @@
         {
           "type": "config",
           "name": "appsettings",
-          "apiVersion": "2018-11-01",
+          "apiVersion": "2018-02-01",
+          "location": "[parameters('location')]",
           "dependsOn": [
             "[resourceId('Microsoft.Web/sites', parameters('websiteName'))]"
           ],
@@ -223,15 +224,16 @@
           }
         },
         {
-          "apiVersion": "2018-11-01",
+          "apiVersion": "2018-02-01",
           "type": "config",
           "name": "connectionstrings",
+          "location": "[parameters('location')]",
           "dependsOn": [
             "[resourceId('Microsoft.Web/sites', parameters('websiteName'))]"
           ],
           "properties": {
             "DbContext": {
-              "value": "[concat('Server=tcp:', parameters('sqlServerName'), '.database.windows.net,1433;Database=', parameters('databaseName'), '<database-name>;')]",
+              "value": "[concat('Server=tcp:', parameters('sqlServerName'), '.database.windows.net,1433;Database=', parameters('databaseName'), ';')]",
               "type": "SQLAzure"
             }
           }
@@ -240,7 +242,7 @@
           "name": "virtualNetwork",
           "type": "config",
           "apiVersion": "2018-02-01",
-          "location": "[resourceGroup().location]",
+          "location": "[parameters('location')]",
           "properties": {
             "subnetResourceid": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), 'web')]",
             "swiftSupported": true
@@ -249,13 +251,27 @@
             "[resourceId('Microsoft.Web/sites', parameters('websiteName'))]",
             "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), 'web')]"
           ]
+        },
+        {
+          "type": "sourcecontrols",
+          "apiVersion": "2018-02-01",
+          "name": "web",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', parameters('websiteName'))]"
+          ],
+          "properties": {
+            "repoUrl": "https://github.com/arincoau/app-service-private-link.git",
+            "branch": "master",
+            "isManualIntegration": true
+          }
         }
       ]
     },
     {
       "type": "Microsoft.Network/privateEndpoints",
       "apiVersion": "2019-12-01",
-      "name": "[concat(parameters('sqlServerName'),'-pl')]",
+      "name": "[concat(parameters('sqlServerName'),'-pe')]",
       "location": "australiaeast",
       "dependsOn": [
         "[resourceId('Microsoft.Sql/servers', parameters('sqlServerName'))]",
@@ -264,7 +280,7 @@
       "properties": {
         "privateLinkServiceConnections": [
           {
-            "name": "[concat(parameters('sqlServerName'),'-pl')]",
+            "name": "[concat(parameters('sqlServerName'),'-pe')]",
             "properties": {
               "privateLinkServiceId": "[resourceId('Microsoft.Sql/servers', parameters('sqlServerName'))]",
               "groupIds": [
@@ -288,7 +304,7 @@
       "name": "sql-endpoint-a-record",
       "type": "Microsoft.Resources/deployments",
       "dependsOn": [
-        "[resourceId('Microsoft.Network/privateEndpoints', concat(parameters('sqlServerName'),'-pl'))]",
+        "[resourceId('Microsoft.Network/privateEndpoints', concat(parameters('sqlServerName'),'-pe'))]",
         "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.database.windows.net')]"
       ],
       "properties": {
@@ -335,7 +351,7 @@
             "value": "[parameters('sqlServerName')]"
           },
           "networkInterfaceResourceId": {
-            "value": "[reference(resourceId('Microsoft.Network/privateEndpoints', concat(parameters('sqlServerName'), '-pl'))).networkInterfaces[0].id]"
+            "value": "[reference(resourceId('Microsoft.Network/privateEndpoints', concat(parameters('sqlServerName'), '-pe'))).networkInterfaces[0].id]"
           }
         }
       }
