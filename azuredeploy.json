@@ -2,9 +2,6 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "storageAccountName": {
-      "type": "string"
-    },
     "virtualNetworkName": {
       "type": "string"
     },
@@ -49,32 +46,6 @@
     {
       "type": "Microsoft.Network/privateDnsZones",
       "apiVersion": "2018-09-01",
-      "name": "privatelink.blob.core.windows.net",
-      "location": "global",
-      "properties": {
-      },
-      "resources": [
-        {
-          "type": "virtualNetworkLinks",
-          "apiVersion": "2018-09-01",
-          "name": "vnetlink",
-          "location": "global",
-          "dependsOn": [
-            "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]",
-            "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
-          ],
-          "properties": {
-            "registrationEnabled": false,
-            "virtualNetwork": {
-              "id": "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "type": "Microsoft.Network/privateDnsZones",
-      "apiVersion": "2018-09-01",
       "name": "privatelink.database.windows.net",
       "location": "global",
       "properties": {
@@ -83,7 +54,7 @@
         {
           "type": "virtualNetworkLinks",
           "apiVersion": "2018-09-01",
-          "name": "vnetlink",
+          "name": "link-to-arinco-app-vnet",
           "location": "global",
           "dependsOn": [
             "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.database.windows.net')]",
@@ -119,17 +90,9 @@
             }
           },
           {
-            "name": "storage",
-            "properties": {
-              "addressPrefix": "10.0.1.0/24",
-              "privateEndpointNetworkPolicies": "Disabled",
-              "privateLinkServiceNetworkPolicies": "Enabled"
-            }
-          },
-          {
             "name": "web",
             "properties": {
-              "addressPrefix": "10.0.2.0/24",
+              "addressPrefix": "10.0.1.0/24",
               "delegations": [
                 {
                   "name": "delegation",
@@ -137,9 +100,7 @@
                     "serviceName": "Microsoft.Web/serverfarms"
                   }
                 }
-              ],
-              "privateEndpointNetworkPolicies": "Enabled",
-              "privateLinkServiceNetworkPolicies": "Enabled"
+              ]
             }
           }
         ]
@@ -161,27 +122,13 @@
         {
           "type": "subnets",
           "apiVersion": "2019-11-01",
-          "name": "storage",
+          "name": "web",
           "dependsOn": [
             "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
             "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), 'sql')]"
           ],
           "properties": {
             "addressPrefix": "10.0.1.0/24",
-            "privateEndpointNetworkPolicies": "Disabled",
-            "privateLinkServiceNetworkPolicies": "Enabled"
-          }
-        },
-        {
-          "type": "subnets",
-          "apiVersion": "2019-11-01",
-          "name": "web",
-          "dependsOn": [
-            "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
-            "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), 'storage')]"
-          ],
-          "properties": {
-            "addressPrefix": "10.0.2.0/24",
             "delegations": [
               {
                 "name": "delegation",
@@ -189,9 +136,7 @@
                   "serviceName": "Microsoft.Web/serverfarms"
                 }
               }
-            ],
-            "privateEndpointNetworkPolicies": "Enabled",
-            "privateLinkServiceNetworkPolicies": "Enabled"
+            ]
           }
         }
       ]
@@ -221,19 +166,22 @@
             "name": "[parameters('databaseSkuName')]",
             "tier": "[parameters('databaseSkuTier')]"
           }
+        },
+        {
+          "type": "administrators",
+          "apiVersion": "2019-06-01-preview",
+          "name": "ActiveDirectory",
+          "dependsOn": [
+            "[parameters('sqlServerName')]",
+            "[parameters('webSiteName')]"
+          ],
+          "properties": {
+            "administratorType": "ActiveDirectory",
+            "login": "[parameters('webSiteName')]",
+            "sid": "[reference(resourceId('Microsoft.Web/sites', parameters('webSiteName')), '2018-11-01', 'Full').identity.principalId]"
+          }
         }
       ]
-    },
-    {
-      "name": "[parameters('storageAccountName')]",
-      "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2018-07-01",
-      "location": "[parameters('location')]",
-      "kind": "StorageV2",
-      "sku": {
-        "name": "Standard_LRS",
-        "tier": "Standard"
-      }
     },
     {
       "apiVersion": "2016-09-01",
@@ -272,6 +220,20 @@
           "properties": {
             "WEBSITE_DNS_SERVER": "168.63.129.16",
             "WEBSITE_VNET_ROUTE_ALL": "1"
+          }
+        },
+        {
+          "apiVersion": "2018-11-01",
+          "type": "config",
+          "name": "connectionstrings",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', parameters('websiteName'))]"
+          ],
+          "properties": {
+            "DbContext": {
+              "value": "[concat('Server=tcp:', parameters('sqlServerName'), '.database.windows.net,1433;Database=', parameters('databaseName'), '<database-name>;')]",
+              "type": "SQLAzure"
+            }
           }
         },
         {
@@ -318,37 +280,6 @@
         ],
         "subnet": {
           "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), 'sql')]"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.Network/privateEndpoints",
-      "apiVersion": "2019-12-01",
-      "name": "[concat(parameters('storageAccountName'),'-pl-blob')]",
-      "location": "australiaeast",
-      "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
-        "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), 'storage')]"
-      ],
-      "properties": {
-        "privateLinkServiceConnections": [
-          {
-            "name": "arincoappstore-pl-blob",
-            "properties": {
-              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
-              "groupIds": [
-                "blob"
-              ],
-              "privateLinkServiceConnectionState": {
-                "status": "Approved",
-                "description": "Auto-approved",
-                "actionsRequired": "None"
-              }
-            }
-          }
-        ],
-        "subnet": {
-          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), 'storage')]"
         }
       }
     },
@@ -405,63 +336,6 @@
           },
           "networkInterfaceResourceId": {
             "value": "[reference(resourceId('Microsoft.Network/privateEndpoints', concat(parameters('sqlServerName'), '-pl'))).networkInterfaces[0].id]"
-          }
-        }
-      }
-    },
-    {
-      "apiVersion": "2017-05-10",
-      "name": "store-endpoint-a-record",
-      "type": "Microsoft.Resources/deployments",
-      "dependsOn": [
-        "[resourceId('Microsoft.Network/privateEndpoints', concat(parameters('storageAccountName'),'-pl-blob'))]",
-        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.blob.core.windows.net')]"
-      ],
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "parameters": {
-            "privateDnsName": {
-              "type": "string"
-            },
-            "networkInterfaceResourceId": {
-              "type": "string"
-            },
-            "aRecordName": {
-              "type": "string"
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Network/privateDnsZones/A",
-              "name": "[concat(parameters('privateDnsName'),'/', parameters('aRecordName'))]",
-              "location": "global",
-              "apiVersion": "2018-09-01",
-              "properties": {
-                "ttl": 3600,
-                "aRecords": [
-                  {
-                    "ipv4Address": "[reference(parameters('networkInterfaceResourceId'), '2019-12-01').ipConfigurations[0].properties.privateIPAddress]"
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        "parameters": {
-          "privateDnsName": {
-            "value": "privatelink.blob.core.windows.net"
-          },
-          "aRecordName": {
-            "value": "[parameters('storageAccountName')]"
-          },
-          "networkInterfaceResourceId": {
-            "value": "[reference(resourceId('Microsoft.Network/privateEndpoints', concat(parameters('storageAccountName'), '-pl-blob'))).networkInterfaces[0].id]"
           }
         }
       }

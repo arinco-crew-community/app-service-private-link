@@ -2,9 +2,9 @@
 
 Azure Private Link allows you to connect privately to Azure PaaS services from an Azure Virtual Network. This eliminates data exposure to the public internet.
 
-In this blog we will look at how we can deploy an Azure App Service and connect it to Azure SQL, Azure Storage and Azure KeyVault using Azure Private Link.
+In this blog we will look at how we can deploy an ASP.NET Core application to an Azure App Service and connect to an Azure SQL server using Azure Private Link.
 
-We'll be using the az cli to complete the deployment. If you want to skip straight to the code. The ARM template is available on github [here](https://github.com/arincoau/app-service-private-link).
+We will use the az cli to deploy the ifrastructure and application code. If you want to skip straight to the code. The ARM template is available on github [here](https://github.com/arincoau/app-service-private-link).
 
 Or you can deploy it straight to Azure.
 
@@ -39,14 +39,12 @@ az network vnet create \
   --location australiaeast
 ```
 
-The virtual network will have three subnets.
+The virtual network will have two subnets.
 
-- web (for the app service)
-  - this subnet will be delegated to `Microsoft.Web/serverfarms`
 - sql (for the Azure SQL Private Endpoint)
   - this subnet will have `privateEndpointNetworkPolicies` disabled. [More info](https://docs.microsoft.com/en-us/azure/private-link/disable-private-endpoint-network-policy)
-- storage (for the Azure SQL Private Endpoint)
-  - this subnet will have `privateEndpointNetworkPolicies` disabled. [More info](https://docs.microsoft.com/en-us/azure/private-link/disable-private-endpoint-network-policy)
+- web (for the app service)
+  - this subnet will be delegated to `Microsoft.Web/serverfarms`
 
 ### sql
 
@@ -66,71 +64,36 @@ az network vnet subnet update \
   --disable-private-endpoint-network-policies
 ```
 
-### storage
-
-Same as with the sql subnet we need to perform this deployment in two steps.
-
-``` sh
-az network vnet subnet create \
-  --resource-group app-service-private-link \
-  --vnet-name arinco-app-vnet \
-  --name storage \
-  --address-prefixes 10.0.1.0/24
-
-az network vnet subnet update \
-  --resource-group app-service-private-link \
-  --vnet-name arinco-app-vnet \
-  --name storage \
-  --disable-private-endpoint-network-policies
-```
-
 ### web
 ``` sh
 az network vnet subnet create \
   --resource-group app-service-private-link \
   --vnet-name arinco-app-vnet \
   --name web \
-  --address-prefixes 10.0.2.0/24 \
+  --address-prefixes 10.0.1.0/24 \
   --delegations Microsoft.Web/serverfarms
 ```
 
 ## A few notes on Private DNS zones
 
-Next up we need to deploy a Private DNS Zone for each of the PaaS services we plan on using. There are a couple of things we should note here one regarding DNS resolution of Private Endpoints and the other regarding Azure Storage.
+Next up we need to deploy a Private DNS Zone for each of the PaaS services we plan on using. There are a couple of things we should note here regarding DNS resolution of Private Endpoints.
 
 ### DNS Resolution of Private Endpoints
 
 When setting up the Private DNS Zones it is good idea to follow the recommended approach of prefixing privatelink to the DNS name of the service. The reasons for this are specified in the Azure documentation and are as follows.
 
-> When you create a private endpoint, the DNS CNAME resource record for the storage account is updated to an alias in a subdomain with the prefix 'privatelink'.
+> When you create a private endpoint, the DNS CNAME resource record for the resource is updated to an alias in a subdomain with the prefix 'privatelink'.
 
-> This approach enables access to the storage account *using the same connection string* for clients on the VNet hosting the private endpoints, as well as clients outside the VNet.
-
-### Azure Storage
-
- Another thing to note is that Azure Storage is actually made up of a number of different services. We need to deploy a Private DNS Zone for each of the services we plan on using. The list of services and their recommended DNS Zone names are.
-
- | Storage service        | Zone name                            |
-| :--------------------- | :----------------------------------- |
-| Blob service           | `privatelink.blob.core.windows.net`  |
-| Data Lake Storage Gen2 | `privatelink.dfs.core.windows.net`   |
-| File service           | `privatelink.file.core.windows.net`  |
-| Queue service          | `privatelink.queue.core.windows.net` |
-| Table service          | `privatelink.table.core.windows.net` |
-| Static Websites        | `privatelink.web.core.windows.net`   |
+> This approach enables access to the resource *using the same connection string* for clients on the VNet hosting the private endpoints, as well as clients outside the VNet.
 
 ## Deploy Private DNS Zones
 
-In our application we will be using Azure SQL and the Azure Blob service from Azure Storage. Therefore we need to deploy Private DNS zones named `privatelink.database.windows.net` `privatelink.blob.core.windows.net` 
+In our application we will be using Azure SQL, therefore we need to deploy a Private DNS zones named `privatelink.database.windows.net`
 
 ``` sh
 az network private-dns zone create \
   --resource-group app-service-private-link \
   --name privatelink.database.windows.net 
-
-az network private-dns zone create \
-  --resource-group app-service-private-link \
-  --name privatelink.blob.core.windows.net 
 ```
 
 And link the Private DNS zones to the VNET we created previously.
@@ -144,23 +107,14 @@ az network private-dns link vnet create \
   --registration-enabled false
 ```
 
-``` sh
-az network private-dns link vnet create \
-  --resource-group app-service-private-link \
-  --zone-name  "privatelink.blob.core.windows.net" \
-  --name link-to-arinco-app-vnet \
-  --virtual-network arinco-app-vnet \
-  --registration-enabled false
-```
-
 ## Deploy an Azure SQL Database
 
-Now we can deploy the SQL server. You should replace the <admin_user> and <admin_password> values in the following command with your own values. Please take note of these values as we will use them later to connect to the database from the cloud service.
+Now we can deploy the SQL server. You should replace the <admin_password> value in the following command with your own password.
 
 ``` sh
 az sql server create \
   --resource-group app-service-private-link \
-  --name arinco-app-sql-server \
+  --name arinco-app-sql \
   --admin-user adminuser \
   --admin-password '<admin_password>'
 ```
@@ -170,19 +124,9 @@ And a database
 ``` sh
 az sql db create \
   --resource-group app-service-private-link \
-  --server arinco-app-sql-server \
-  --name web-db \
+  --server arinco-app-sql \
+  --name arinco-app-db \
   --edition Basic
-```
-
-## Deploy Storage Account
-
-This one should hopefully be fairly easy. We now need to deploy the Azure Storage account.
-
-``` sh
-az storage account create \
-  --resource-group app-service-private-link \
-  --name arincoappstorage
 ```
 
 ## Deploy Azure Private Link - SQL server
@@ -192,7 +136,7 @@ We need to create a private endpoint in our vnet for our Azure SQL Server, but b
 ``` sh
 az sql server show \
   --resource-group app-service-private-link \
-  --name arinco-app-sql-server \
+  --name arinco-app-sql \
   --output tsv \
   --query id
 ```
@@ -201,20 +145,20 @@ Take note of the output and replace <sql_server_id> in the following command.
 
 ``` sh
 az network private-endpoint create \
-    --name arinco-app-sql-server-pl \
+    --name arinco-app-sql-pe \
     --resource-group app-service-private-link \
     --vnet-name arinco-app-vnet  \
     --subnet sql \
     --private-connection-resource-id <sql_server_id> \
-    --group-ids sqlServer \
-    --connection-name arinco-app-sql-server-pl-conn
+    --group-id sqlServer \
+    --connection-name arinco-app-sql-pe-conn
 ```
 
 Now we need to locate the resource ID of the network interface card that was created by our private link.
 
 ``` sh
 az network private-endpoint show \
-  --name arinco-app-sql-server-pl \
+  --name arinco-app-sql-pe \
   --resource-group app-service-private-link \
   --query 'networkInterfaces[0].id' \
   --output tsv
@@ -233,77 +177,18 @@ Now we can create the dns zone entries. Replace <private_ip> with the IP address
 
 ``` sh
 az network private-dns record-set a create \
-  --name arinco-app-sql-server \
+  --name arinco-app-sql \
   --zone-name privatelink.database.windows.net \
   --resource-group app-service-private-link
 
 az network private-dns record-set a add-record \
-  --record-set-name arinco-app-sql-server \
+  --record-set-name arinco-app-sql \
   --zone-name privatelink.database.windows.net \
   --resource-group app-service-private-link \
   --ipv4-address <private_ip>
 ```
 
-## Deploy Azure Private Link - Blob Service
-
-We need to create a private endpoint in our vnet for our Blob service, but before we do this we need to get the resource ID of the storage account we created earlier.
-
-``` sh
-az storage account show \
-  --resource-group app-service-private-link \
-  --name arincoappstorage \
-  --output tsv \
-  --query id
-```
-
-Take note of the output and replace <storage_service_id> in the following command.
-
-``` sh
-az network private-endpoint create \
-    --name arincoappstorage-blob-pl \
-    --resource-group app-service-private-link \
-    --vnet-name arinco-app-vnet  \
-    --subnet storage \
-    --private-connection-resource-id <storage_service_id> \
-    --group-ids blob \
-    --connection-name arincoappstorage-blob-pl-conn
-```
-
-Now we need to locate the resource ID of the network interface card that was created by our private link.
-
-``` sh
-az network private-endpoint show \
-  --name arincoappstorage-blob-pl \
-  --resource-group app-service-private-link \
-  --query 'networkInterfaces[0].id' \
-  --output tsv
-```
-
-Take note of the output and use it as the <nic_id> value in the following command to get the IP address of the private link endpoint. Take note of this value as it will be used to create the a records in the private dns zone.
-
-``` sh
-az resource show --ids <nic_id> \
-  --api-version 2019-04-01 \
-  --query 'properties.ipConfigurations[0].properties.privateIPAddress' \
-  --output tsv
-```
-
-Now we can create the dns zone entries. Replace <private_ip> with the IP address of the private link we identified above.
-
-``` sh
-az network private-dns record-set a create \
-  --name arincoappstorage \
-  --zone-name privatelink.blob.core.windows.net \
-  --resource-group app-service-private-link
-
-az network private-dns record-set a add-record \
-  --record-set-name arincoappstorage \
-  --zone-name privatelink.blob.core.windows.net \
-  --resource-group app-service-private-link \
-  --ipv4-address 10.0.1.4
-```
-
-## Deploy the Website
+## Deploy the App Service
 
 Now we have deployed and configured all the resources required for out web application to function we can now deploy the Web App.
 
@@ -322,6 +207,15 @@ And now we can deploy the Web App
 az webapp create \
   --resource-group app-service-private-link \
   --plan arinco-app-web-asp \
+  --name arinco-app-web \
+  --deployment-local-git
+```
+
+And assign it a managed service identity
+
+``` sh
+az webapp identity assign \
+  --resource-group app-service-private-link \
   --name arinco-app-web
 ```
 
@@ -344,36 +238,66 @@ az webapp config appsettings set \
   --settings WEBSITE_VNET_ROUTE_ALL=1 WEBSITE_DNS_SERVER=168.63.129.16
 ```
 
-## Validate it works
+And to connect to our Azure SQL database we need to set the connection string
+
+``` sh
+az webapp config appsettings set \
+  --resource-group app-service-private-link \
+  --name arinco-app-web \
+  --connection-string-type SQLAzure \
+  -- settings DbContext='Server=tcp:arinco-app-sql.database.windows.net,1433;Database=arinco-app-db;'
+```
+
+## Validate DNS resolution
 
 We can now validate that resolution of the private endpoints works by opening the portal and navigating to the Web App we created. Then in sidebar under Development Tools select Console.
 
 We can then issue the following command to resolve the database server. Note we are using the address without privatelink. The output address should be the private IP address of the database service private link.
 
-`nameresolver arinco-app-sql-server.database.windows.net`
+`nameresolver arinco-app-sql.database.windows.net`
 
 ``` cmd
-D:\home\site\wwwroot>nameresolver arinco-app-sql-server.database.windows.net
+D:\home\site\wwwroot>nameresolver arinco-app-sql.database.windows.net
 Server: 168.63.129.16
 
 Non-authoritative answer:
-Name: arinco-app-sql-server.privatelink.database.windows.net
+Name: arinco-app-sql.privatelink.database.windows.net
 Addresses: 
 	10.0.0.4
 Aliases: 
-	arinco-app-sql-server.privatelink.database.windows.net
+	arinco-app-sql.privatelink.database.windows.net
 ```
 
-We can then issue the following command to resolve the storage account blob service. Note we are using the address without privatelink. The output address should be the private IP address of the database service private link.
+## Deploy the sample web app
 
-``` cmd
-D:\home\site\wwwroot>nameresolver arincoappstorage.blob.core.windows.net
-Server: 168.63.129.16
+We can now deploy the sample application. This sample application is an ASP.NET Core/Entity Framework Core application. It has an API which returns movies from the database. It is set up to create the database schema on startup and seed the movies table with a few entries.
 
-Non-authoritative answer:
-Name: arincoappstorage.privatelink.blob.core.windows.net
-Addresses: 
-	10.0.1.4
-Aliases: 
-	arincoappstorage.privatelink.blob.core.windows.net
+### SQL Admin
+
+Before we can deploy the sample web app we need to make it an administrator of the Azure SQL Server.
+
+First we need to get the object id of the App Service managed identity. Execute the following and note the output.
+
+``` sh
+az ad sp list \
+  --display-name arinco-app-web \
+  --query '[0].objectId' \
+  --output json
+```
+
+Then we can add the app service as an administrator of the Azur SQL server. Replate <app_service_object_id> with the output of the command above.
+
+``` sh
+az sql server ad-admin create \
+  --resource-group app-service-private-link \
+  --server-name arinco-app-sql \
+  --object-id 5feb9f22-8905-467d-b2fe-1ece38e1d5df \
+  --display-name arinco-app-web 
+```
+
+### Deploy app code
+
+Now we can deploy the sample application to the app service.
+
+``` sh
 ```
